@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 const { initfirebase } = require('./config/firebase');
 const { initTwilio } = require('./config/twilio');
+const { initEmail } = require('./config/email');
 const authRoutes = require('./routes/auth');
 
 const app = express();
@@ -16,6 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 // config service 
 initfirebase();
 initTwilio();
+initEmail();
 
 //Authentication Routes
 app.use('/', authRoutes);
