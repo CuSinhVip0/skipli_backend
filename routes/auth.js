@@ -17,8 +17,14 @@ router.post('/createAccessCode', async (req, res) => {
             return res.status(400).json({ error: 'Phone number is required' });
         }
 
-        const accessCode = otpGenerator.generate(6, { upperCaseAlphabets: false, specialChars: false });
         const db = getDb();
+        // chek user instructor
+        const usersDoc = await db.collection('users').doc(phoneNumber).get();
+        if (!usersDoc.exists) {
+            return res.status(404).json({ error: 'Phone number not found' });
+        }
+
+        const accessCode = otpGenerator.generate(6, { lowerCaseAlphabets: false, upperCaseAlphabets: false, specialChars: false });
 
         // access code in Firebase
         await db.collection('access_code').doc(phoneNumber).set({
