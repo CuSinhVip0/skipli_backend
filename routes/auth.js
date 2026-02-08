@@ -3,7 +3,10 @@ const router = express.Router();
 const { getDb } = require('../config/firebase');
 const { sendSMS } = require('../config/twilio');
 const { sendEmail } = require('../config/email');
+const { authenticateToken } = require('../middleware/auth');
 const otpGenerator = require('otp-generator')
+const jwt = require('jsonwebtoken');
+
 const expiresMinute = 15;
 /**
  * POST /createAccessCode
@@ -100,7 +103,6 @@ router.post('/validateAccessCode', async (req, res) => {
         const usersDoc = await db.collection('users')
             .where('phone', '==', phoneNumber)
             .where('isActive', '==', true)
-            .where('role', '==', 'instructor')
             .limit(1)
             .get();
         if (usersDoc.empty) {
@@ -110,10 +112,25 @@ router.post('/validateAccessCode', async (req, res) => {
         // remvove access code
         await db.collection('access_code').doc(phoneNumber).delete();
 
+        // Generate JWT
+        const token = jwt.sign(
+            data,
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN }
+        );
+
+        // Generate refresh token
+        const refreshToken = jwt.sign(
+            data,
+            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '1d' }
+        );
         return res.json({
             success: true,
             userType: 'instructor',
-            userData: data
+            userData: data,
+            access: token,
+            refresh: refreshToken,
         })
     } catch (error) {
         res.status(500).json({ error: 'Failed to validate access code', details: error.message });
@@ -137,8 +154,7 @@ router.post('/loginEmail', async (req, res) => {
         const db = getDb();
         // chek user student
         const usersDoc = await db.collection('users')
-            .where('email', '==', email)
-            .where('role', '==', 'student')
+            .where('email', '==', email.toLowerCase())
             .where('isActive', '==', true)
             .limit(1)
             .get();
@@ -150,7 +166,7 @@ router.post('/loginEmail', async (req, res) => {
         const accessCode = otpGenerator.generate(6, { lowerCaseAlphabets: false, upperCaseAlphabets: false, specialChars: false });
 
         // access code fribase
-        await db.collection('email_access_code').doc(email).set({
+        await db.collection('email_access_code').doc(email.toLowerCase()).set({
             code: accessCode,
             createdAt: new Date().toISOString(),
             expiresAt: new Date(Date.now() + expiresMinute * 60 * 1000).toISOString()
@@ -197,7 +213,7 @@ router.post('/validateAccessCodeEmail', async (req, res) => {
         const db = getDb();
 
         // get access code
-        const codeDoc = await db.collection('email_access_code').doc(email).get();
+        const codeDoc = await db.collection('email_access_code').doc(email.toLowerCase()).get();
 
         if (!codeDoc.exists) {
             return res.status(401).json({ error: 'Invalid access code' });
@@ -212,14 +228,13 @@ router.post('/validateAccessCodeEmail', async (req, res) => {
 
         // Check expire
         if (new Date() > new Date(codeData.expiresAt)) {
-            await db.collection('email_access_code').doc(email).delete();
+            await db.collection('email_access_code').doc(email.toLowerCase()).delete();
             return res.status(401).json({ error: 'Access code has expired' });
         }
 
         // Then check students
         const studentDoc = await db.collection('users')
-            .where('email', '==', email)
-            .where('role', '==', 'student')
+            .where('email', '==', email.toLowerCase())
             .where('isActive', '==', true)
             .limit(1)
             .get();
@@ -229,19 +244,93 @@ router.post('/validateAccessCodeEmail', async (req, res) => {
         // chek user instructor
         const data = studentDoc.docs[0].data();
         // remvove access code
-        await db.collection('email_access_code').doc(email).update({
+        await db.collection('email_access_code').doc(email.toLowerCase()).update({
             code: '',
             validatedAt: new Date().toISOString()
         });
+
+        // Generate JWT
+        const token = jwt.sign(
+            data,
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN }
+        );
+        // Generate refresh token
+        const refreshToken = jwt.sign(
+            data,
+            process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '1d' }
+        );
+
         return res.json({
             success: true,
             userType: 'student',
-            userData: data
+            userData: data,
+            access: token,
+            refresh: refreshToken,
         })
     } catch (error) {
         res.status(500).json({ error: 'Failed to validate access code', details: error.message });
     }
 });
 
+// Refresh token
+router.post('/refresh-token', async (req, res, next) => {
+    try {
+        const { refreshToken } = req.body;
+
+        if (!refreshToken) {
+            return res.status(401).json(formatError('Refresh token required'));
+        }
+
+        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        const { phone } = decoded;
+        const db = getDb();
+        const userDC = await db.collection('users')
+            .where('email', '==', phone)
+            .where('isActive', '==', true)
+            .limit(1)
+            .get();
+        if (userDC.empty) {
+            return res.status(401).json(formatError('Invalid refresh token'));
+        }
+
+        // Generate new access token
+        const token = jwt.sign(
+            userDC,
+            process.env.JWT_SECRET,
+            { expiresIn: process.env.JWT_EXPIRES_IN }
+        );
+
+        return res.json({
+            success: true,
+            access: token,
+        })
+    } catch (error) {
+        res.status(401).json(formatError('Invalid or expired refresh token'));
+    }
+});
+
+// Get current user profile
+router.get('/me', authenticateToken, async (req, res, next) => {
+    try {
+        const db = getDb();
+        const userDC = await db.collection('users')
+            .where('phone', '==', req.user.phone)
+            .where('isActive', '==', true)
+            .limit(1)
+            .get();
+        if (userDC.empty) {
+            return res.status(401).json(formatError('Invalid refresh token'));
+        }
+        return res.json({
+            success: true,
+            userType: 'student',
+            userData: userDC.docs[0].data(),
+        })
+    } catch (error) {
+        next(error);
+    }
+});
 
 module.exports = router;

@@ -26,7 +26,7 @@ router.post('/addStudent', async (req, res) => {
             .get();
 
         const emailQuery = db.collection('users')
-            .where('email', '==', email)
+            .where('email', '==', email.toLowerCase())
             .limit(1)
             .get();
 
@@ -41,7 +41,7 @@ router.post('/addStudent', async (req, res) => {
             id: uuidv4(),
             name,
             phone,
-            email,
+            email: email.toLowerCase(),
             createdAt: new Date().toISOString(),
             role: 'student',
             isActive: true,
@@ -357,6 +357,7 @@ router.put('/editStatusLesson', async (req, res) => {
         res.status(500).json({ error: 'Failed to update student', details: error.message });
     }
 });
+
 router.delete('/lesson/:id', async (req, res) => {
     try {
         const { id } = req.params;
