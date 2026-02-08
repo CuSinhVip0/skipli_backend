@@ -6,6 +6,7 @@ const { initfirebase } = require('./config/firebase');
 const { initTwilio } = require('./config/twilio');
 const { initEmail } = require('./config/email');
 const authRoutes = require('./routes/auth');
+const instructorRoutes = require('./routes/instructor');
 
 const app = express();
 const server = http.createServer(app);
@@ -21,6 +22,7 @@ initEmail();
 
 //Authentication Routes
 app.use('/', authRoutes);
+app.use('/', instructorRoutes);
 
 app.get('/status', (req, res) => {
     res.json({

@@ -23,6 +23,7 @@ router.post('/createAccessCode', async (req, res) => {
 
         const usersDoc = await db.collection('users')
             .where('phone', '==', phoneNumber)
+            .where('isActive', '==', true)
             .limit(1)
             .get();
 
@@ -98,12 +99,12 @@ router.post('/validateAccessCode', async (req, res) => {
         // chek user instructor
         const usersDoc = await db.collection('users')
             .where('phone', '==', phoneNumber)
+            .where('isActive', '==', true)
             .where('role', '==', 'instructor')
             .limit(1)
             .get();
         if (usersDoc.empty) {
             return res.status(404).json({ error: 'Instructor not found' });
-
         }
         const data = usersDoc.docs[0].data();
         // remvove access code
@@ -138,6 +139,7 @@ router.post('/loginEmail', async (req, res) => {
         const usersDoc = await db.collection('users')
             .where('email', '==', email)
             .where('role', '==', 'student')
+            .where('isActive', '==', true)
             .limit(1)
             .get();
 
@@ -218,6 +220,7 @@ router.post('/validateAccessCodeEmail', async (req, res) => {
         const studentDoc = await db.collection('users')
             .where('email', '==', email)
             .where('role', '==', 'student')
+            .where('isActive', '==', true)
             .limit(1)
             .get();
         if (studentDoc.empty) {

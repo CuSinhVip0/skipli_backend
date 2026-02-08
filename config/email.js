@@ -44,7 +44,29 @@ const sendEmail = async (to, subject, text) => {
     }
 };
 
+const sendEmailCreateStudent = async (to, subject, text) => {
+    if (!mailer) {
+        return { success: false, message: 'Email not configured' };
+    }
+
+    try {
+        const info = await mailer.sendMail({
+            from: `"Skipli - <${process.env.EMAILUSER}>",`,
+            to: to,
+            subject: subject,
+            text: text,
+            html: `<div style="padding: 20px">
+                        <h2>${text}</h2>
+                        <p>Please login at: <a href="http://localhost:3000/login">http://localhost:3000/login</a> </p>
+                    </div>`
+        });
+        return { success: true, messageId: info.messageId };
+    } catch (error) {
+        return { success: false, message: error.message };
+    }
+};
+
 module.exports = {
     initEmail,
-    sendEmail
+    sendEmail, sendEmailCreateStudent
 };
