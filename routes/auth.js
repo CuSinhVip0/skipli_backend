@@ -280,10 +280,17 @@ router.post('/refresh-token', async (req, res, next) => {
         const { refreshToken } = req.body;
 
         if (!refreshToken) {
-            return res.status(401).json(formatError('Refresh token required'));
+            return res.status(401).json({ error: 'Refresh token required' });
         }
-
-        const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        let decoded;
+        try {
+            decoded = jwt.verify(
+                refreshToken,
+                process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
+            );
+        } catch (err) {
+            return res.status(401).json({ error: 'Invalid or expired refresh token' });
+        }
         const { phone } = decoded;
         const db = getDb();
         const userDC = await db.collection('users')
@@ -292,7 +299,7 @@ router.post('/refresh-token', async (req, res, next) => {
             .limit(1)
             .get();
         if (userDC.empty) {
-            return res.status(401).json(formatError('Invalid refresh token'));
+            return res.status(401).json({ error: 'Invalid refresh token' });
         }
 
         // Generate new access token
@@ -307,7 +314,7 @@ router.post('/refresh-token', async (req, res, next) => {
             access: token,
         })
     } catch (error) {
-        res.status(401).json(formatError('Invalid or expired refresh token'));
+        res.status(401).json({ error: 'Invalid or expired refresh token' });
     }
 });
 
@@ -321,7 +328,7 @@ router.get('/me', authenticateToken, async (req, res, next) => {
             .limit(1)
             .get();
         if (userDC.empty) {
-            return res.status(401).json(formatError('Invalid refresh token'));
+            return res.status(401).json({ error: 'Invalid refresh token' });
         }
         return res.json({
             success: true,
