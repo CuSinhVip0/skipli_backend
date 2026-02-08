@@ -96,10 +96,6 @@ router.put('/editProfile', authenticateToken, async (req, res) => {
     try {
         const { name, email } = req.body;
 
-        if (!phone) {
-            return res.status(400).json({ error: 'Phone number is required' });
-        }
-
         const db = getDb();
         const studentFB = db.collection('users').doc(req.user.phone);
         const studentDoc = await studentFB.get();
