@@ -294,7 +294,7 @@ router.post('/refresh-token', async (req, res, next) => {
         const { phone } = decoded;
         const db = getDb();
         const userDC = await db.collection('users')
-            .where('email', '==', phone)
+            .where('phone', '==', phone)
             .where('isActive', '==', true)
             .limit(1)
             .get();
@@ -304,7 +304,7 @@ router.post('/refresh-token', async (req, res, next) => {
 
         // Generate new access token
         const token = jwt.sign(
-            userDC,
+            userDC.docs[0].data(),
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN }
         );
